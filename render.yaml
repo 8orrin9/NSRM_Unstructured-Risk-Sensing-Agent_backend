@@ -1,0 +1,20 @@
+# Render 배포 설정 (Infrastructure as Code)
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: nsrm-risk-sensing-api
+    runtime: python
+    plan: free
+    # backend/ 안에서 실행: main.py 가 sys.path 에 backend/ 를 넣고 top-level import 를 쓰므로
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # OpenAI API 키(리포트 기능용) — Render 대시보드에서 값 입력
+      - key: OPENAI_API_KEY
+        sync: false
+      # 추가 허용 CORS origin (쉼표 구분) — 필요 시 대시보드에서 지정
+      - key: CORS_ORIGINS_EXTRA
+        sync: false
