@@ -14,6 +14,11 @@ from typing import List, Optional, Dict
 from models.news import NewsItem, NewsGroup, NewsStats, Severity, RiskCategory
 from database.connection import get_news_db, get_supply_chain_db
 from config import SERVED_RUN_IDS
+from services.recommendation_service import (
+    get_recommendation_index,
+    RecommendationIndex,
+    normalize_keyword,
+)
 
 
 # run_id IN (?, ?) 플레이스홀더 (모든 AGENT 쿼리에 일관 적용)
@@ -38,19 +43,19 @@ def determine_severity(issue_priority: str, risk_score: float) -> Severity:
     """
     risk_score(=impactScore/100) 단일 임계값으로 4단계 severity 결정.
 
-    프론트 NewsOverlay 4등분 게이지 경계(25/50/75)와 정합:
-    - risk_score >= 0.75 → critical (impactScore >= 75)
-    - risk_score >= 0.50 → high     (impactScore >= 50)
-    - risk_score >= 0.25 → medium   (impactScore >= 25)
-    - 그 외              → low
+    프론트 NewsOverlay 게이지 경계(20/60/85)와 정합:
+    - risk_score >= 0.85 → critical (impactScore 85~100)
+    - risk_score >= 0.61 → high     (impactScore 61~84)
+    - risk_score >= 0.21 → medium   (impactScore 21~60)
+    - 그 외              → low       (impactScore 0~20)
 
     issue_priority 인자는 호출부 호환을 위해 유지하되 사용하지 않는다.
     """
-    if risk_score >= 0.75:
+    if risk_score >= 0.85:
         return "critical"
-    elif risk_score >= 0.50:
+    elif risk_score >= 0.61:
         return "high"
-    elif risk_score >= 0.25:
+    elif risk_score >= 0.21:
         return "medium"
     else:
         return "low"
@@ -232,10 +237,40 @@ def _match_name(scur, name: str) -> Optional[str]:
     return row["site_code"] if row else None
 
 
+def _get_unmatched_normalized(cursor, news_id: str) -> Dict[str, str]:
+    """해당 뉴스의 매핑 실패 키워드 normalized -> 원문 라벨. 추천 태그 교집합용."""
+    cursor.execute(f"""
+        SELECT unmatched_keywords FROM AGENT2_DOC
+        WHERE run_id IN ({_RUN_PH}) AND news_id = ?
+          AND unmatched_keywords IS NOT NULL
+          AND unmatched_keywords NOT IN ('', '[]', 'null')
+    """, (*SERVED_RUN_IDS, news_id))
+    result: Dict[str, str] = {}
+    for (raw,) in cursor.fetchall():
+        try:
+            items = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            keyword = it.get("keyword")
+            if not keyword:
+                continue
+            norm = it.get("normalized") or normalize_keyword(keyword)
+            result.setdefault(norm, keyword)
+    return result
+
+
 def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
-                     include_detail: bool = False) -> NewsItem:
+                     include_detail: bool = False,
+                     index: Optional[RecommendationIndex] = None) -> NewsItem:
     """마스터 원문 + AGENT 산출물을 조합하여 NewsItem 생성."""
     run_id = _run_id_for_origin(master["origin"])
+    if index is None:
+        index = get_recommendation_index()
 
     ko = _get_ko_text(cursor, news_id)
     title = ko.get("title_ko") or master.get("title") or ""
@@ -250,6 +285,15 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
         content = master.get("content") or master.get("description") or ""
         detail = (summary + "\n\n" + content).strip() if summary else content
 
+    # 추천 키워드: 전역 집계(index)와 이 뉴스의 값을 교집합
+    keywords = _get_keywords(cursor, run_id, news_id)
+    recommended_keywords = [k for k in keywords if k in index.recommended_keywords]
+    # 태그 추천 기능 비활성화 (추후 재활성화 시 아래 복원)
+    # unmatched = _get_unmatched_normalized(cursor, news_id)
+    # recommended_tags = [
+    #     label for norm, label in unmatched.items() if norm in index.recommended_tags
+    # ]
+
     return NewsItem(
         id=news_id,
         title=title,
@@ -259,9 +303,10 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
         severity=severity_value,
         summary=summary,
         detail=detail,
-        keywords=_get_keywords(cursor, run_id, news_id),
-        recommendedKeywords=[],  # AGENT4.recommended_keywords 는 전부 비어있음
+        keywords=keywords,
+        recommendedKeywords=recommended_keywords,
         tags=_get_tags(cursor, run_id, news_id),
+        # recommendedTags=recommended_tags,  # 태그 추천 기능 비활성화
         relatedEntityIds=_related_entity_ids_for_news(cursor, news_id),
         region="Global",
         url=master.get("url") or "",
@@ -306,6 +351,9 @@ def get_news_list(
         # 원문 일괄 조회
         masters = _fetch_master_rows(cursor, list(risk_rows.keys()))
 
+        # 추천 키워드/태그 전역 집계 1회 취득 (뉴스 루프 밖)
+        index = get_recommendation_index()
+
         news_items = []
         for news_id, risk in risk_rows.items():
             master = masters.get(news_id)
@@ -316,7 +364,7 @@ def get_news_list(
             if domestic_only and master.get("source") != "NAVER_NEWS":
                 continue
 
-            item = _build_news_item(cursor, news_id, master, risk, include_detail=False)
+            item = _build_news_item(cursor, news_id, master, risk, include_detail=False, index=index)
 
             # severity 후처리 필터
             if severity and item.severity != severity:

@@ -41,5 +41,23 @@ API_PREFIX = "/api"
 # 서빙 대상 파이프라인 run (full_run + golden). 그 외 run(isolated_* 등)은 노출 안 함.
 SERVED_RUN_IDS = ["full_run_01", "golden_eval_20260715"]
 
+# 추천 키워드/태그 집계 설정 (recommendation_service.py)
+# - 키워드: Risk 뉴스에서 등장 뉴스 수 >= RECO_KEYWORD_THRESHOLD, 기존 Pool에 없음
+# - 태그: 매핑 실패 키워드가 태그 형태로 등장 뉴스 수 >= RECO_TAG_THRESHOLD, EVENT 가능, 기존 태그와 비중복
+RECO_KEYWORD_THRESHOLD = 5   # 키워드 등장 뉴스 수 임계값 (기존 recommend_keywords.py와 동일)
+RECO_TAG_THRESHOLD = 3       # 태그 등장 뉴스 수 임계값 (unmatched 기반이라 키워드보다 희소)
+RECO_TAG_DUP_SIMILARITY = 0.7  # 기존 EVENT 태그 이름과의 중복 판정 Jaccard 임계값
+# EVENT 태그 부적합 추상어(블랙리스트) — Agent_2_Tag_Mapper/config.py 규칙 필터에서 가져옴
+# (Agent_2 config는 패키지 __init__ 의존으로 서빙 계층에서 직접 import 불가하여 복제)
+RECO_ABSTRACT_KEYWORD_BLACKLIST = ["제재", "규제", "리스크", "위기", "사건", "변동", "문제", "상황", "영향"]
+
+# 뉴스 수집용 키워드 Pool 엑셀 (recommendation_service.load_existing_keyword_pool)
+# 서빙 축소본에는 agents/가 없어 Agent_4 로직을 서빙 계층에서 복제 → 엑셀 경로만 여기서 지정
+RECO_KEYWORD_SET_EXCEL_PATH = BASE_DIR / "data" / "TAG" / "DB_TAG_Risk Factor Pool_vF.xlsx"
+RECO_KEYWORD_SET_SHEET_NAME = "2. Keyword Set_ai"
+RECO_KEYWORD_COLUMN_INDEX = 5      # E열 (1-based)
+RECO_TARGET_REGION_COLUMN_INDEX = 7  # G열 (1-based)
+RECO_TARGET_REGION = "KR"
+
 # OpenAI API (Reporting 용)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
