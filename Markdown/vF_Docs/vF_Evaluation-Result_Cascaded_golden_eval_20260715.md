@@ -1,8 +1,7 @@
 # Cascaded 평가 결과 — `golden_eval_20260715`
 
-> 생성: 2026-07-16 00:04 · 정답 51건 (GOLDEN_GROUND_TRUTH)
-> 지표 정의: [`vF_GoldenDataset_Evaluation-Methodology.md`](./vF_GoldenDataset_Evaluation-Methodology.md) · 실행: [`vF_Execution_Golden-Data.md`](./vF_Execution_Golden-Data.md)  
-> 평가용 script: [`evaluate_cascaded.py`](../../scripts\db\evaluate_cascaded.py)
+> 생성: 2026-07-18 19:54 · 정답 51건 (GOLDEN_GROUND_TRUTH)
+> 지표 정의: [`vF_GoldenDataset_Evaluation-Methodology.md`](./vF_GoldenDataset_Evaluation-Methodology.md) · 실행: [`vF_Execution_Golden-Data.md`](./vF_Execution_Golden-Data.md)
 > 그룹 판정 정책: `individual_first` (개별행 우선)
 
 ---
@@ -23,9 +22,9 @@
 | DB Searcher | Entity R (DB매칭 only) | 0.309 |
 | DB Searcher | Error Rate | 0.000 |
 | Risk Evaluator | Specificity | 1.000 |
-| Risk Evaluator | Timing Accuracy | 0.634 |
+| Risk Evaluator | Timing Accuracy | 0.610 |
 | Risk Evaluator | Routing Accuracy | 0.725 |
-| Risk Evaluator | Critical Miss Rate | 0.000 |
+| Risk Evaluator | Critical Miss Rate | 0.077 |
 
 **엔티티 타입별 P/R (DB Searcher)**
 
@@ -49,8 +48,8 @@
 
 | 정답＼예측 | ISSUE | SMD | NONE |
 |---|---|---|---|
-| **ISSUE** | 13 | 0 | 0 |
-| **SMD** | 3 | 10 | 11 |
+| **ISSUE** | 12 | 1 | 0 |
+| **SMD** | 2 | 11 | 11 |
 | **NONE** | 0 | 0 | 14 |
 
 **Risk 판정 (비리스크 정답 대상)**: TN=20, FP=0
@@ -97,7 +96,7 @@
 | GD_2a_014 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
 | GD_2a_015 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
 | GD_2a_016 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
-| GD_2a_017 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
+| GD_2a_017 | 2a | 0 | 1 | ISSUE | SMD | ONGOING | SCHEDULED | ✓ |
 | GD_2a_018 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
 | GD_2a_019 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
 | GD_2a_020 | 2a | 0 | 1 | ISSUE | ISSUE | ONGOING | ONGOING | ✓ |
@@ -125,7 +124,7 @@
 | GD_2d_041 | 2d | 0 | 1 | SMD | SMD | SCHEDULED | SCHEDULED | ✓ |
 | GD_2d_042 | 2d | 0 | 1 | SMD | NONE | ONGOING | - | — |
 | GD_2d_043 | 2d | 0 | 1 | SMD | NONE | SCHEDULED | - | — |
-| GD_2d_044 | 2d | 0 | 1 | SMD | ISSUE | ONGOING | ONGOING | ✓ |
+| GD_2d_044 | 2d | 0 | 1 | SMD | SMD | ONGOING | ONGOING | ✓ |
 | GD_2d_050 | 2d | 0 | 1 | SMD | SMD | ONGOING | SCHEDULED | ✓ |
 | GD_2d_051 | 2d | 0 | 1 | SMD | SMD | SCHEDULED | SCHEDULED | ✓ |
 | GD_2e_045 | 2e | 0 | 0 | NONE | NONE | ONGOING | - | — |
