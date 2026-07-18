@@ -49,6 +49,7 @@ class NewsItem(BaseModel):
     keywords: List[str]
     recommendedKeywords: List[str]  # 신규 Pool 추천 키워드
     tags: List[str]  # 리스크 태그
+    recommendedTags: List[str] = []  # 신규 EVENT 태그 추천 (매핑 실패 키워드 기반)
     relatedEntityIds: List[str]
     region: str
     url: str
