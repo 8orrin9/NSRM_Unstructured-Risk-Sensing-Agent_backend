@@ -201,7 +201,59 @@ vercel --prod     # 또는 Vercel 대시보드에서 Redeploy
 
 ---
 
-## 4. 최종 검증
+## 4. Git 브랜치 → 자동 배포 연동
+
+한 번 연결해두면, 이후에는 **CLI로 배포할 필요 없이 git push만으로 자동 재배포**된다.
+Render(backend)와 Vercel(frontend)은 각각 **지정된 브랜치에 새 커밋이 push되면 자동으로 다시 빌드·배포**한다.
+
+```
+git push origin master  ─┬─▶ Render 가 master 감지 → backend 자동 재배포
+                         └─▶ Vercel 이 master 감지 → frontend 자동 재배포
+```
+
+### 4-1. 각 플랫폼이 보는 배포 브랜치 확인 (최초 1회)
+
+"push하면 반영"이 성립하려면, 각 플랫폼이 **어느 브랜치를 배포 대상으로 보는지**가 맞아야 한다.
+GitHub 레포 기본 브랜치가 `master`이면 두 플랫폼도 보통 `master`를 잡지만, 반드시 확인한다.
+
+- **Render (backend)**: 대시보드 → 해당 서비스 → **Settings → Build & Deploy → Branch** = `master` 확인
+- **Vercel (frontend)**: 대시보드 → 해당 프로젝트 → **Settings → Git → Production Branch** = `master` 확인
+
+둘 다 `master`면, 아래 워크플로우가 그대로 성립한다.
+
+### 4-2. 권장 작업 흐름 (개발 브랜치 → master 배포)
+
+운영은 항상 `master`를 바라본다. 개발은 별도 브랜치에서 하고, **완료 시점에만 `master`로 반영**한다.
+
+```
+개발 브랜치(예: revision_risk-evaluation)  ← 여기서 작업·커밋
+        │  (개발 완료)
+        ▼  merge
+     master                                  ← 운영 배포 브랜치 (Render/Vercel이 감시)
+```
+
+```bash
+# 1) 개발 브랜치에서 작업
+git add -A
+git commit -m "..."
+git push origin revision_risk-evaluation   # 개발 브랜치 백업 (배포 트리거 안 됨)
+
+# 2) 배포하고 싶을 때 → master 로 반영
+git checkout master
+git merge revision_risk-evaluation
+git push origin master                      # ← 이 순간 Render/Vercel 자동 재배포
+
+# 3) 다시 개발 브랜치로 복귀
+git checkout revision_risk-evaluation
+```
+
+> **주의: 개발 브랜치에 push해도 배포되지 않는다.** 배포는 오직 `master` push 시점에만 일어난다.
+> (frontend의 `NEXT_PUBLIC_API_URL` 같은 환경변수만 바꾼 경우는 커밋이 없으므로,
+> 대시보드에서 수동 Redeploy가 필요하다 — 함정 ⑥ 참고.)
+
+---
+
+## 5. 최종 검증
 
 1. `<backend-url>/health` → `{"status":"healthy"}`
 2. 브라우저에서 frontend URL 접속 → 화면에 **뉴스/엔티티 데이터가 표시**되면 연동 성공
@@ -212,7 +264,7 @@ vercel --prod     # 또는 Vercel 대시보드에서 Redeploy
 
 ---
 
-## 5. 사내망 참고 (TLS 프록시)
+## 6. 사내망 참고 (TLS 프록시)
 
 사내 네트워크는 HTTPS를 검사하는 프록시가 있어, CLI(`vercel`, `curl`)에서
 `self-signed certificate in certificate chain` 에러가 날 수 있다.
@@ -224,7 +276,7 @@ vercel --prod     # 또는 Vercel 대시보드에서 Redeploy
 
 ---
 
-## 6. 보안 주의
+## 7. 보안 주의
 
 - **API 키(`OPENAI_API_KEY`)는 절대 git에 커밋하지 않는다.** `.env`는 `.gitignore`에 포함.
 - 키는 **Render 환경변수**에만 저장한다.
@@ -239,5 +291,8 @@ vercel --prod     # 또는 Vercel 대시보드에서 Redeploy
 | backend (Render) | `https://nsrm-risk-sensing-api.onrender.com` |
 | backend 레포 | `github.com/8orrin9/NSRM_Unstructured-Risk-Sensing-Agent_backend` |
 | frontend (Vercel) | `https://frontend-cyan-ten-54.vercel.app` |
+| frontend 레포 | `github.com/8orrin9/NSRM_Unstructured-Risk-Sensing-Agent_frontend` |
+| 배포 브랜치 (양쪽 공통) | `master` (push 시 자동 재배포) |
+| 개발 브랜치 (backend) | `revision_risk-evaluation` |
 | API prefix | `/api` |
 | 헬스체크 | `/health` |
