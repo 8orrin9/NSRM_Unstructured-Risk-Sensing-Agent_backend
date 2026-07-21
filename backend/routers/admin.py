@@ -12,10 +12,16 @@ from models.admin import (
     OpKeyword, OpKeywordCreate, OpTag, OpTagCreate, OpDeleteRequest,
     RecommendedKeyword, RecommendedTag,
 )
+from models.supply_chain_master import (
+    RawMaterialRow, MaterialRow, SiteRow, SupplierRow,
+)
 from services.news_service import get_admin_groups, save_admin_group_display
 from services.admin_service import (
     list_keywords, create_keyword, soft_delete_keywords, recommend_keywords,
     list_tags, create_tag, soft_delete_tags, recommend_tags,
+)
+from services.supply_chain_master_service import (
+    list_raw_materials, list_materials, list_sites, list_suppliers,
 )
 
 router = APIRouter()
@@ -116,3 +122,41 @@ async def recommend_admin_tags():
         return recommend_tags()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to recommend tags: {str(e)}")
+
+
+# ─── 공급망 Database 마스터 조회 (supply_chain.db, 조회 전용) ─────────────────
+
+@router.get("/admin/supply-chain/raw-materials", response_model=List[RawMaterialRow])
+async def list_admin_raw_materials():
+    """원자재 마스터 활성 전체 조회"""
+    try:
+        return list_raw_materials()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch raw materials: {str(e)}")
+
+
+@router.get("/admin/supply-chain/materials", response_model=List[MaterialRow])
+async def list_admin_materials():
+    """자재 마스터 활성 전체 조회"""
+    try:
+        return list_materials()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch materials: {str(e)}")
+
+
+@router.get("/admin/supply-chain/sites", response_model=List[SiteRow])
+async def list_admin_sites():
+    """거점 마스터 활성 전체 조회"""
+    try:
+        return list_sites()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch sites: {str(e)}")
+
+
+@router.get("/admin/supply-chain/suppliers", response_model=List[SupplierRow])
+async def list_admin_suppliers():
+    """협력사 마스터 활성 전체 조회"""
+    try:
+        return list_suppliers()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch suppliers: {str(e)}")
