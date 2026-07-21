@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import CORS_ORIGINS, API_PREFIX
-from routers import news, entities, reports
+from routers import news, entities, reports, admin
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(news.router, prefix=API_PREFIX, tags=["News"])
 app.include_router(entities.router, prefix=API_PREFIX, tags=["Entities"])
 app.include_router(reports.router, prefix=API_PREFIX, tags=["Reports"])
+app.include_router(admin.router, prefix=API_PREFIX, tags=["Admin"])
 
 
 @app.get("/")

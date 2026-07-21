@@ -97,3 +97,20 @@ class KeywordPoolItem(BaseModel):
     keyword: str
     addedAt: str
     source: Literal["recommended", "manual"]
+
+
+class AdminGroup(BaseModel):
+    """관리자 화면용 검증 그룹 (숨김 포함 전체 + 노출 상태)"""
+    id: str  # f"{run_id}:{group_id}"
+    title: str
+    theme: str
+    memberCount: int  # 렌더 가능 멤버 수
+    newsIds: List[str]  # 렌더 가능 멤버 news_id (하위 뉴스 리스트용)
+    autoDisplayed: bool  # compute_group_serving 자동계산 결과(is_displayed)
+    adminOverride: Optional[bool] = None  # 관리자 수동 지정(None=미개입)
+    currentlyShown: bool  # 최종 노출 여부 (override 우선, 없으면 auto)
+
+
+class AdminDisplayRequest(BaseModel):
+    """노출 그룹 선택 저장 요청 — 노출할 그룹 id 전체 목록"""
+    shownIds: List[str]
