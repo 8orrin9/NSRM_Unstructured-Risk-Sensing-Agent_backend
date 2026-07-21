@@ -7,6 +7,7 @@ DB 스키마: AGENT1~5 파이프라인 산출물 (news_intelligence.db)
 """
 import sys
 import json
+from datetime import datetime
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -415,7 +416,7 @@ def get_news_groups() -> List[NewsGroup]:
             WHERE g.run_id IN ({_RUN_PH})
               AND g.group_id != 'ungrouped'
               AND g.group_theme IS NOT NULL
-              AND COALESCE(d.is_displayed, 1) = 1
+              AND COALESCE(d.admin_override, d.is_displayed, 1) = 1
             ORDER BY g.group_id ASC
         """, tuple(SERVED_RUN_IDS))
         rows = cursor.fetchall()
@@ -486,3 +487,112 @@ def get_news_stats() -> NewsStats:
             low=severity_counts["low"],
             groups=groups_count,
         )
+
+
+# ─── 관리자: AI 핵심 인사이트(그룹) 노출 관리 ───────────────────────────────────
+
+def _renderable_member_ids(cursor, run_id: str, group_id: str) -> List[str]:
+    """프론트가 실제로 렌더하는 멤버 news_id 목록.
+
+    compute_group_serving.renderable_members 와 동일 조건
+    (ISSUE/SMD, is_grouped=0). 목록의 memberCount 와 서빙 후보 판정을 일치시킨다.
+    """
+    cursor.execute("""
+        SELECT m.news_id
+        FROM AGENT5_GROUP_MEMBER m
+        JOIN AGENT4_RISK_EVAL r
+          ON r.run_id = m.run_id AND r.news_id = m.news_id
+        WHERE m.run_id = ? AND m.group_id = ?
+          AND r.issue_type IN ('ISSUE', 'SMD')
+          AND r.is_grouped = 0
+    """, (run_id, group_id))
+    return [row["news_id"] for row in cursor.fetchall()]
+
+
+def get_admin_groups() -> List["AdminGroup"]:
+    """검증된 전체 그룹(숨김 포함) + 각 그룹의 노출 상태 조회 (관리자용).
+
+    노출 필터(is_displayed/admin_override)는 적용하지 않고 검증 조건만 적용.
+    단, 렌더 가능 멤버 < MIN_RENDERABLE_MEMBERS 인 그룹은 표기 자격 미달로 제외
+    (compute_group_serving 자동 숨김 기준과 동일 — 관리자가 강제 노출해도 카드가
+    제대로 안 그려지므로 선택 대상에서 뺀다).
+    """
+    from models.news import AdminGroup
+
+    # compute_group_serving.MIN_RENDERABLE_MEMBERS 와 동기화 유지.
+    MIN_RENDERABLE_MEMBERS = 3
+
+    with get_news_db() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(f"""
+            SELECT g.run_id, g.group_id, g.group_name, g.group_theme,
+                   d.is_displayed, d.admin_override
+            FROM AGENT5_GROUP g
+            LEFT JOIN SERVING_GROUP_DISPLAY d
+              ON d.run_id = g.run_id AND d.group_id = g.group_id
+            WHERE g.run_id IN ({_RUN_PH})
+              AND g.group_id != 'ungrouped'
+              AND g.group_theme IS NOT NULL
+            ORDER BY g.group_id ASC
+        """, tuple(SERVED_RUN_IDS))
+        rows = cursor.fetchall()
+
+        groups: List[AdminGroup] = []
+        for row in rows:
+            run_id = row["run_id"]
+            group_id = row["group_id"]
+
+            member_ids = _renderable_member_ids(cursor, run_id, group_id)
+            if len(member_ids) < MIN_RENDERABLE_MEMBERS:
+                continue
+
+            auto = row["is_displayed"] if row["is_displayed"] is not None else 1
+            override = row["admin_override"]  # 0/1/None
+            shown = bool(override) if override is not None else bool(auto)
+
+            groups.append(AdminGroup(
+                id=f"{run_id}:{group_id}",
+                title=row["group_name"] or (row["group_theme"][:40] if row["group_theme"] else group_id),
+                theme=row["group_theme"] or "",
+                memberCount=len(member_ids),
+                newsIds=member_ids,
+                autoDisplayed=bool(auto),
+                adminOverride=None if override is None else bool(override),
+                currentlyShown=shown,
+            ))
+
+        return groups
+
+
+def save_admin_group_display(shown_ids: List[str]) -> int:
+    """노출 그룹 선택 저장 (관리자용).
+
+    관리자 화면에 표기된 그룹(get_admin_groups 대상 = 멤버≥3)을 대상으로,
+    shown_ids 에 포함되면 admin_override=1, 아니면 0 으로 UPSERT.
+    (전체 명시 저장 → 체크 해제=숨김. 화면에 안 나온 그룹은 건드리지 않는다.)
+    """
+    shown_set = set(shown_ids)
+    computed_at = datetime.now().isoformat(timespec="seconds")
+
+    # 대상 = 관리자 화면에 실제 표기된 그룹 (멤버≥3 등 표기 기준 일치)
+    targets = get_admin_groups()
+
+    with get_news_db() as conn:
+        cursor = conn.cursor()
+
+        updated = 0
+        for g in targets:
+            run_id, group_id = g.id.split(":", 1)  # "{run_id}:{group_id}"
+            override = 1 if g.id in shown_set else 0
+            cursor.execute("""
+                INSERT INTO SERVING_GROUP_DISPLAY (run_id, group_id, admin_override, computed_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(run_id, group_id)
+                DO UPDATE SET admin_override = excluded.admin_override,
+                              computed_at = excluded.computed_at
+            """, (run_id, group_id, override, computed_at))
+            updated += 1
+
+        conn.commit()  # DatabaseConnection 은 auto-commit 아님 — 명시 필요
+        return updated
