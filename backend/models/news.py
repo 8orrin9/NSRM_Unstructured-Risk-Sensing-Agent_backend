@@ -36,6 +36,14 @@ RiskFactor = Literal[
 ]
 
 
+class TagRef(BaseModel):
+    """태그 클릭 → 공급망 조인용 참조 메타 (tags[i]와 인덱스 정합)"""
+    tagId: str
+    tagName: str
+    tagType: Literal["EVENT", "SITE", "RAW_MATERIAL", "SUPPLIER", "MATERIAL"]
+    linkable: bool  # EVENT 및 공급망 연결키 없는 태그는 False
+
+
 class NewsItem(BaseModel):
     """뉴스 아이템 (Frontend NewsItem과 동일)"""
     id: str
@@ -49,6 +57,7 @@ class NewsItem(BaseModel):
     keywords: List[str]
     recommendedKeywords: List[str]  # 신규 Pool 추천 키워드
     tags: List[str]  # 리스크 태그
+    tagRefs: List[TagRef] = []  # 태그 클릭 조인용 메타 (tags와 1:1 정합)
     recommendedTags: List[str] = []  # 신규 EVENT 태그 추천 (매핑 실패 키워드 기반)
     relatedEntityIds: List[str]
     region: str
