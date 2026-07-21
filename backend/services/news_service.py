@@ -113,13 +113,43 @@ def _get_keywords(cursor, run_id: str, news_id: str) -> List[str]:
     return [r["keyword"] for r in cursor.fetchall() if r["keyword"]]
 
 
-def _get_tags(cursor, run_id: str, news_id: str) -> List[str]:
-    """AGENT2_TAG 에서 tag_name 목록 (중복 제거)."""
+def _get_tags(cursor, run_id: str, news_id: str) -> tuple:
+    """AGENT2_TAG(태그명) + TAG_MASTER(조인 메타)로 (tags, tag_refs) 반환.
+
+    AGENT2_TAG.target_region 은 NULL 이므로 tag_id 단독 조인.
+    동일 tag_id 의 TAG_MASTER 행들은 target_table_column 이 동일하므로 존재 여부만 확인.
+    linkable = EVENT 아님 AND non-empty target_table_column 존재 (EVENT 는 '').
+    tag_name 기준 중복 제거(기존 DISTINCT tag_name 동작 유지).
+    """
+    from models.news import TagRef
+
     cursor.execute(f"""
-        SELECT DISTINCT tag_name FROM AGENT2_TAG
-        WHERE run_id IN ({_RUN_PH}) AND news_id = ?
+        SELECT t.tag_id, t.tag_name, t.tag_type
+        FROM AGENT2_TAG t
+        WHERE t.run_id IN ({_RUN_PH}) AND t.news_id = ?
+          AND t.tag_id IS NOT NULL AND t.tag_name IS NOT NULL
+        GROUP BY t.tag_id, t.tag_name, t.tag_type
+        ORDER BY MIN(t.id) ASC
     """, (*SERVED_RUN_IDS, news_id))
-    return [r["tag_name"] for r in cursor.fetchall() if r["tag_name"]]
+    rows = cursor.fetchall()
+
+    tags: List[str] = []
+    refs: List[TagRef] = []
+    for r in rows:
+        if r["tag_name"] in tags:
+            continue
+        cursor.execute("""
+            SELECT 1 FROM TAG_MASTER
+            WHERE tag_id = ? AND target_table_column IS NOT NULL
+              AND target_table_column != '' LIMIT 1
+        """, (r["tag_id"],))
+        linkable = r["tag_type"] != "EVENT" and cursor.fetchone() is not None
+        tags.append(r["tag_name"])
+        refs.append(TagRef(
+            tagId=r["tag_id"], tagName=r["tag_name"],
+            tagType=r["tag_type"], linkable=linkable,
+        ))
+    return tags, refs
 
 
 def _get_ko_text(cursor, news_id: str) -> dict:
@@ -295,6 +325,8 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
     #     label for norm, label in unmatched.items() if norm in index.recommended_tags
     # ]
 
+    tag_names, tag_refs = _get_tags(cursor, run_id, news_id)
+
     return NewsItem(
         id=news_id,
         title=title,
@@ -306,7 +338,8 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
         detail=detail,
         keywords=keywords,
         recommendedKeywords=recommended_keywords,
-        tags=_get_tags(cursor, run_id, news_id),
+        tags=tag_names,
+        tagRefs=tag_refs,
         # recommendedTags=recommended_tags,  # 태그 추천 기능 비활성화
         relatedEntityIds=_related_entity_ids_for_news(cursor, news_id),
         region="Global",
