@@ -39,9 +39,8 @@ RISK_CATEGORIES_KO = {
     "disaster": "재난/기후"
 }
 
-# Severity 한글 매핑
+# Severity 한글 매핑 (3단 체계: High/Medium/Low)
 SEVERITY_KO = {
-    "critical": "심각",
     "high": "높음",
     "medium": "보통",
     "low": "낮음"
@@ -82,7 +81,7 @@ async def generate_report(request: ReportRequest):
 - 카테고리: {RISK_CATEGORIES_KO.get(news.category, news.category)}
 - 심각도: {SEVERITY_KO.get(news.severity, news.severity)} (영향도 {news.impactScore}/100)
 - 출처: {news.source}
-- 관련 공급망 거점: {', '.join(news.relatedEntityIds) if news.relatedEntityIds else '없음'}
+- 관련 공급망 생산지: {', '.join(news.relatedEntityIds) if news.relatedEntityIds else '없음'}
 - 요약: {news.summary}
 - 상세: {news.detail}"""
         for i, news in enumerate(selected_news)
@@ -97,7 +96,7 @@ async def generate_report(request: ReportRequest):
   # 공급망 리스크 리포트
   ## 1. 핵심 요약 (Executive Summary) — 3~4문장
   ## 2. 주요 리스크 상세 — 뉴스별 소제목과 영향 분석
-  ## 3. 공급망 영향 평가 — 관련 거점/의존도 관점
+  ## 3. 공급망 영향 평가 — 관련 생산지/의존도 관점
   ## 4. 권고 조치 (Recommended Actions)
 - 번호 목록(1., 2., 3. ...)의 각 항목은 한 줄짜리 핵심 제목으로 쓰고,
   구체적인 실행 내용·근거·기한 등은 반드시 그 번호 항목 아래에 들여쓴 불렛포인트(- )로 2~4개씩 작성합니다.
