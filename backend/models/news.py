@@ -6,8 +6,8 @@ from typing import List, Literal, Optional
 from datetime import datetime
 
 
-# Frontend Severity 타입과 동일
-Severity = Literal["critical", "high", "medium", "low"]
+# Frontend Severity 타입과 동일 (3단 체계: High/Medium/Low)
+Severity = Literal["high", "medium", "low"]
 
 # Frontend RiskCategory 타입과 동일
 RiskCategory = Literal[
@@ -92,9 +92,8 @@ class ResolvedGroup(BaseModel):
 
 
 class NewsStats(BaseModel):
-    """뉴스 통계"""
+    """뉴스 통계 (3단 체계: High/Medium/Low)"""
     total: int
-    critical: int
     high: int
     medium: int
     low: int

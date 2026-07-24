@@ -42,21 +42,18 @@ RISK_CATEGORY_TO_FRONTEND: Dict[str, RiskCategory] = {
 
 def determine_severity(issue_priority: str, risk_score: float) -> Severity:
     """
-    risk_score(=impactScore/100) 단일 임계값으로 4단계 severity 결정.
+    risk_score(=impactScore/100) 단일 임계값으로 3단계 severity 결정.
 
-    프론트 NewsOverlay 게이지 경계(20/60/85)와 정합:
-    - risk_score >= 0.85 → critical (impactScore 85~100)
-    - risk_score >= 0.61 → high     (impactScore 61~84)
-    - risk_score >= 0.21 → medium   (impactScore 21~60)
-    - 그 외              → low       (impactScore 0~20)
+    프론트 NewsOverlay 게이지 경계(25/75)와 정합:
+    - risk_score >= 0.75 → high    (impactScore >= 75)
+    - risk_score >= 0.25 → medium  (impactScore >= 25)
+    - 그 외              → low
 
     issue_priority 인자는 호출부 호환을 위해 유지하되 사용하지 않는다.
     """
-    if risk_score >= 0.85:
-        return "critical"
-    elif risk_score >= 0.61:
+    if risk_score >= 0.75:
         return "high"
-    elif risk_score >= 0.21:
+    elif risk_score >= 0.25:
         return "medium"
     else:
         return "low"
@@ -313,8 +310,9 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
 
     detail = ""
     if include_detail:
-        content = master.get("content") or master.get("description") or ""
-        detail = (summary + "\n\n" + content).strip() if summary else content
+        # 원문(Full Contents)에는 순수 본문만 담는다. 요약은 별도 섹션에서 표시되므로
+        # 중복 노출을 막기 위해 여기서 summary 를 앞에 붙이지 않는다.
+        detail = master.get("content") or master.get("description") or ""
 
     # 추천 키워드: 전역 집계(index)와 이 뉴스의 값을 교집합
     keywords = _get_keywords(cursor, run_id, news_id)
@@ -327,11 +325,18 @@ def _build_news_item(cursor, news_id: str, master: dict, risk: dict,
 
     tag_names, tag_refs = _get_tags(cursor, run_id, news_id)
 
+    # 골든 데이터는 과거 날짜이므로 서빙 시 '오늘 날짜'로 표기(사용자 지시).
+    # 요청 시점마다 초가 달라지지 않도록 오늘 날짜 + 고정 시각(정오)으로 결정적 처리.
+    if master.get("origin") == "GOLDEN":
+        published_at = datetime.now().strftime("%Y-%m-%dT12:00:00+09:00")
+    else:
+        published_at = master.get("pub_date") or ""
+
     return NewsItem(
         id=news_id,
         title=title,
         source=master.get("source") or "",
-        publishedAt=master.get("pub_date") or "",
+        publishedAt=published_at,
         category=_resolve_category(cursor, master),
         severity=severity_value,
         summary=summary,
@@ -494,7 +499,7 @@ def get_news_stats() -> NewsStats:
         """, tuple(SERVED_RUN_IDS))
         rows = cursor.fetchall()
 
-        severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        severity_counts = {"high": 0, "medium": 0, "low": 0}
         for row in rows:
             sv = determine_severity(row["issue_priority"], row["risk_score"])
             severity_counts[sv] += 1
@@ -514,7 +519,6 @@ def get_news_stats() -> NewsStats:
 
         return NewsStats(
             total=len(rows),
-            critical=severity_counts["critical"],
             high=severity_counts["high"],
             medium=severity_counts["medium"],
             low=severity_counts["low"],

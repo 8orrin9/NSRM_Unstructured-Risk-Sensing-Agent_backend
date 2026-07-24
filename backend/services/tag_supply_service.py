@@ -144,8 +144,25 @@ def _site_chain(cur, result: TagSupplyChain, country: str) -> None:
     """, (country,))
     result.suppliers = [_supplier_ref(r) for r in cur.fetchall()]
 
+    # 자재 (그 거점들이 생산하는 자재)
+    cur.execute("""
+        SELECT DISTINCT mm.material_code AS code, mm.name_kor AS nameKo, mm.name_eng AS nameEng
+        FROM SITE_MASTER st
+        JOIN SITE_MATERIAL_MAP smm ON smm.site_code = st.site_code AND smm.is_active = 1
+        JOIN MATERIAL_MASTER mm ON mm.material_code = smm.material_code AND mm.is_active = 1
+        WHERE st.country = ? AND st.is_active = 1
+    """, (country,))
+    result.materials = [_plain_ref(r) for r in cur.fetchall()]
+
 
 def _material_chain(cur, result: TagSupplyChain, material_code: str) -> None:
+    # 자재 자기 자신
+    cur.execute("""
+        SELECT material_code AS code, name_kor AS nameKo, name_eng AS nameEng
+        FROM MATERIAL_MASTER WHERE material_code = ? AND is_active = 1
+    """, (material_code,))
+    result.materials = [_plain_ref(r) for r in cur.fetchall()]
+
     # 원재료
     cur.execute("""
         SELECT DISTINCT rm.raw_material_code AS code, rm.name_kor AS nameKo, rm.name_eng AS nameEng

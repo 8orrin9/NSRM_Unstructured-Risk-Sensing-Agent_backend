@@ -84,7 +84,7 @@ def get_entities(
             status_value = "normal"
 
             # Criticality 결정 (간단히 tier로)
-            criticality: Severity = "critical" if tier_value == 1 else ("high" if tier_value == 2 else "medium")
+            criticality: Severity = "high" if tier_value == 1 else ("medium" if tier_value == 2 else "low")
 
             entity = SupplyEntity(
                 id=supplier_id,  # DB supplier_code 사용 (예: KR0001)
@@ -112,7 +112,7 @@ def get_max_severity_from_news_ids(news_ids: List[str]) -> str:
     뉴스 ID 리스트에서 최고 severity 반환 (AGENT4_RISK_EVAL 기준)
 
     Returns:
-        'critical', 'high', 'medium', 'low' 중 하나
+        'high', 'medium', 'low' 중 하나
     """
     if not news_ids:
         return 'low'
@@ -121,15 +121,14 @@ def get_max_severity_from_news_ids(news_ids: List[str]) -> str:
         cursor = conn.cursor()
 
         # determine_severity 로직을 SQL CASE로 미러링하여 최고 severity(rank 최소) 조회
-        # risk_score 단일 임계값 기준 (0.75/0.50/0.25)
+        # risk_score 단일 임계값 기준 (3단 체계: 0.75/0.25)
         placeholders = ','.join('?' * len(news_ids))
         cursor.execute(f"""
             SELECT MIN(
                 CASE
                     WHEN risk_score >= 0.75 THEN 0
-                    WHEN risk_score >= 0.50 THEN 1
-                    WHEN risk_score >= 0.25 THEN 2
-                    ELSE 3
+                    WHEN risk_score >= 0.25 THEN 1
+                    ELSE 2
                 END
             ) as severity_rank
             FROM AGENT4_RISK_EVAL
@@ -141,8 +140,8 @@ def get_max_severity_from_news_ids(news_ids: List[str]) -> str:
         result = cursor.fetchone()
         if result and result['severity_rank'] is not None:
             rank = result['severity_rank']
-            if rank < 4:
-                return ['critical', 'high', 'medium', 'low'][rank]
+            if rank < 3:
+                return ['high', 'medium', 'low'][rank]
         return 'medium'  # 기본값
 
 
